@@ -18,8 +18,8 @@ void sklm(
     if (data.empty())
         throw std::runtime_error("sklm: data is empty");
 
-    const int m = data.size();
-    const int d = data[0].total();
+    const int m = static_cast<int>(data.size());        // number of incoming observations
+    const int d = static_cast<int>(data[0].total());    // observations dimentionality
 
     cv::Mat dataMat(d, m, CV_32F);
     for (int di = 0; di < d; ++di)

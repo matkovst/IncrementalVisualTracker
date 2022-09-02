@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <opencv2/imgproc.hpp>
@@ -81,7 +82,7 @@ cv::Mat matRowIndexing(const cv::Mat& image, const cv::Mat& rowIds)
     cv::MatConstIterator_<float> rowIdsIt = rowIds.begin<float>();
     for (int i = 0; i < image.rows; ++i, ++rowIdsIt)
     {
-        const int rowId = static_cast<int>(*rowIdsIt);
+        const int rowId = static_cast<int>(std::floor(*rowIdsIt));
         image.row(rowId).copyTo(output.row(i));
     }
 
@@ -101,5 +102,5 @@ cv::Rect state2Rect(const cv::Mat& state, cv::Size targetSize)
     const float y1 = cy - height / 2.0f;
     const float x2 = x1 + width;
     const float y2 = y1 + height;
-    return cv::Rect(x1, y1, width, height);
+    return cv::Rect(int(x1), int(y1), int(width), int(height));
 }

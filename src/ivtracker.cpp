@@ -67,7 +67,6 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
 {
     if (!m_trackerInitialized)
         return cv::Rect();
-
     // Do the condensation magic and find the most likely location
     estimateWarpCondensation(image);
 
@@ -151,7 +150,7 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
         const cv::Mat cumconfNN = cv::repeat(cumconf, 1, m_nparticles);
 
         cv::Mat uniformN(1, m_nparticles, CV_32F);
-        cv::randu(uniformN, 0.0f, 1.0f);
+        m_randomSampler.fill(uniformN, cv::RNG::UNIFORM, 0.0f, 0.99f);
         const cv::Mat uniformNN = cv::repeat(uniformN, m_nparticles, 1);
 
         cv::Mat sumMask, cdfIds;
@@ -212,7 +211,7 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     }
 
     /* Store most likely particle */
-    const float normCoeff = 1.0 / cv::sum(m_conf)[0];
+    const float normCoeff = static_cast<float>(1.0 / cv::sum(m_conf)[0]);
     cv::multiply(m_conf, normCoeff, m_conf, 1.0, CV_32F);
     double maxProb;
     int maxProbIdx;

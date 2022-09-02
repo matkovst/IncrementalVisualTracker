@@ -18,7 +18,7 @@ const cv::Scalar ColorGreen { 0, 255, 0 };
 cv::Mat renderTelemetry(int height, const cv::TickMeter& meter)
 {
     const std::int64_t fno = meter.getCounter();
-    const float latency = meter.getAvgTimeMilli();
+    const float latency = static_cast<float>(meter.getAvgTimeMilli());
 
     int baseline;
     const cv::Size textSize = cv::getTextSize(MaxStr, FontFace, FontScale, Thk, &baseline);

@@ -89,4 +89,5 @@ private:
     /* Auxiliaries for optimization */
     cv::Mat m_diff;
     cv::Mat m_UTDiff;
+    cv::RNG m_randomSampler;
 };
