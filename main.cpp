@@ -128,10 +128,12 @@ int main(int argc, char** argv)
         /* Render results */
         cv::rectangle(frame, estBoundingBox, cv::Scalar(0, 0, 255), 2);
         const auto telemetryPanel = renderTelemetry(frame.rows, meter);
-        cv::Mat detailedFrame;
-        cv::hconcat(frame, telemetryPanel, detailedFrame);
+        const auto eigenPanel = renderEigenbasis(
+            frame.cols + telemetryPanel.cols, tracker.objectTemplate(), tracker.mostLikelyWarpImage());
+        cv::Mat detailedFrame, detailedFrameTop;
+        cv::hconcat(frame, telemetryPanel, detailedFrameTop);
+        cv::vconcat(detailedFrameTop, eigenPanel, detailedFrame);
         cv::imshow(WinName, detailedFrame);
-        // cv::waitKey(500);
 
         const auto key = static_cast<char>(cv::waitKey(15));
         if (27 == key || 'q' == key)

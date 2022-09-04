@@ -29,6 +29,7 @@ IncrementalVisualTracker::IncrementalVisualTracker(
     m_conf = cv::Mat(m_nparticles, 1, CV_32F, cv::Scalar::all(1.0 / m_nparticles));
     
     m_templ.mean = cv::Mat::zeros(m_templDim, 1, CV_32F);
+    m_templ.size = m_templShape;
 
     const float mincx = 0.001f;
     const float mincy = 0.001f;
@@ -219,7 +220,16 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     m_est = m_states.row(maxProbIdx).clone();
     const cv::Mat maxProbWimgFlatten = wimgsFlatten.col(maxProbIdx).clone();
     m_wimg = maxProbWimgFlatten.reshape(0, m_templShape.width).clone();
-    cv::transpose(m_wimg, m_wimg);
 
     m_wimgs.emplace_back(maxProbWimgFlatten.clone());
+}
+
+const ObjectTemplate& IncrementalVisualTracker::objectTemplate() const noexcept
+{
+    return m_templ;
+}
+
+const cv::Mat& IncrementalVisualTracker::mostLikelyWarpImage() const noexcept
+{
+    return m_wimg;
 }

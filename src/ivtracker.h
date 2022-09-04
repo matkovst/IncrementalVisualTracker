@@ -8,6 +8,7 @@ struct ObjectTemplate final
     cv::Mat eigbasis;   // eigenbasis
     cv::Mat eigval;     // eigenvalues
     int neff { 0 };     // effective number of data
+    cv::Size size;      // template image size
 };
 
 /**
@@ -56,6 +57,16 @@ public:
      * @return estimated object location
      */
     cv::Rect track(const cv::Mat& image);
+
+    /**
+     * @brief Get object template
+     */
+    const ObjectTemplate& objectTemplate() const noexcept;
+
+    /**
+     * @brief Get most likely particle (warp image)
+     */
+    const cv::Mat& mostLikelyWarpImage() const noexcept;
 
 private:
 
