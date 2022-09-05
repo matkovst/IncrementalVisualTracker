@@ -11,31 +11,30 @@
 #include "model_specific.h"
 
 IncrementalVisualTracker::IncrementalVisualTracker(
-    const cv::Mat& affsig, int nparticles, float condenssig, float forgetting, 
+    const cv::Mat& affsig, int nparticles, PRECISION condenssig, PRECISION forgetting, 
     int batchsize, cv::Size templShape, int maxbasis, int errfunc)
         : m_affsig(affsig.clone())
-        , m_nparticles(nparticles)
         , m_condenssig(condenssig)
         , m_forgetting(forgetting)
         , m_batchsize(batchsize)
         , m_templShape(templShape)
-        , m_maxbasis(maxbasis)
         , m_errfunc(errfunc)
-        , m_templDim(0)
         , m_trackerInitialized(false)
+        , d(templShape.area())
+        , Np(nparticles)
+        , k(maxbasis)
 {
-    m_templDim = m_templShape.area();
-    m_diff = cv::Mat::zeros(m_templDim, m_nparticles, CV_32F);
-    m_conf = cv::Mat(m_nparticles, 1, CV_32F, cv::Scalar::all(1.0 / m_nparticles));
+    m_residual = cv::Mat::zeros(d, Np, CV_PRECISION);
+    m_stateConfidences = cv::Mat(Np, 1, CV_PRECISION, cv::Scalar::all(1.0 / Np));
     
-    m_templ.mean = cv::Mat::zeros(m_templDim, 1, CV_32F);
+    m_templ.mean = cv::Mat::zeros(d, 1, CV_PRECISION);
     m_templ.size = m_templShape;
 
-    const float mincx = 0.001f;
-    const float mincy = 0.001f;
-    const float minscale = (2.0f + std::numeric_limits<float>::epsilon()) / m_templShape.width;
-    const float minar = 0.00001f;
-    m_paramsLowerBound = (cv::Mat_<float>(4, 1) << mincx, mincy, minscale, minar);
+    const auto mincx = static_cast<PRECISION>(0.001);
+    const auto mincy = static_cast<PRECISION>(0.001);
+    const auto minscale = (static_cast<PRECISION>(2.0) + std::numeric_limits<PRECISION>::epsilon()) / m_templShape.width;
+    const auto minar = static_cast<PRECISION>(0.00001);
+    m_paramsLowerBound = (cv::Mat_<PRECISION>(4, 1) << mincx, mincy, minscale, minar);
 }
 
 IncrementalVisualTracker::~IncrementalVisualTracker() = default;
@@ -49,16 +48,16 @@ bool IncrementalVisualTracker::init(const cv::Mat& image, cv::Rect initialBox)
         throw std::runtime_error("IncrementalVisualTracker::init: Given empty box");
 
     // Make initial state parameters
-    const float cx = initialBox.x + initialBox.width / 2.0f;
-    const float cy = initialBox.y + initialBox.height / 2.0f;
-    const float scale = initialBox.width / float(m_templShape.width);
-    const float aspectRatio = initialBox.height / float(initialBox.width);
-    const cv::Mat state0 = (cv::Mat_<float>(1, 4) << cx, cy, scale, aspectRatio);
+    const auto cx = initialBox.x + initialBox.width / static_cast<PRECISION>(2.0);
+    const auto cy = initialBox.y + initialBox.height / static_cast<PRECISION>(2.0);
+    const auto scale = initialBox.width / static_cast<PRECISION>(m_templShape.width);
+    const auto aspectRatio = initialBox.height / static_cast<PRECISION>(initialBox.width);
+    const cv::Mat state0 = (cv::Mat_<PRECISION>(1, 4) << cx, cy, scale, aspectRatio);
 
     const auto mean2d = warpImg(image, state0, m_templShape);
-    m_templ.mean = mean2d.reshape(0, m_templDim).clone();
-    m_est = state0.clone();
-    m_wimg = mean2d.clone();
+    m_templ.mean = mean2d.reshape(0, d).clone();
+    m_mostLikelyState = state0.clone();
+    m_mostLikelyWarpImage = mean2d.clone();
     m_trackerInitialized = true;
 
     return true;
@@ -72,14 +71,14 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
     estimateWarpCondensation(image);
 
     // Do incremental update when we accumulate enough data
-    if (m_wimgs.size() >= m_batchsize)
+    if (m_warpBatch.size() >= m_batchsize)
     {
-        if (m_UTDiff.empty())
+        if (m_backProj.empty())
         {
             cv::Mat eigbasis, eigval, mean;
             int neff;
             sklm(
-                m_wimgs, 
+                m_warpBatch, 
                 m_templ.eigbasis, 
                 m_templ.eigval, 
                 m_templ.mean, 
@@ -96,14 +95,14 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
         }
         else
         {
-            cv::Mat recon = m_templ.eigbasis * m_UTDiff;
+            cv::Mat recon = m_templ.eigbasis * m_backProj;
             for (int i = 0; i < recon.cols; ++i)
                 recon.col(i) += m_templ.mean;
 
             cv::Mat eigbasis, eigval, mean;
             int neff;
             sklm(
-                m_wimgs, 
+                m_warpBatch, 
                 m_templ.eigbasis, 
                 m_templ.eigval, 
                 m_templ.mean, 
@@ -120,22 +119,22 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
 
             for (int i = 0; i < recon.cols; ++i)
                 recon.col(i) -= m_templ.mean;
-            m_UTDiff = m_templ.eigbasis.t() * recon;
+            m_backProj = m_templ.eigbasis.t() * recon;
         }
 
-        m_wimgs.clear();
+        m_warpBatch.clear();
 
         const int nCurrentEigenvectors = m_templ.eigbasis.cols;
-        if (nCurrentEigenvectors > m_maxbasis)
+        if (nCurrentEigenvectors > k)
         {
-            m_templ.eigbasis = m_templ.eigbasis.colRange(0, m_maxbasis).clone();
-            m_templ.eigval = m_templ.eigval.rowRange(0, m_maxbasis).clone();
-            if (!m_UTDiff.empty())
-                m_UTDiff = m_UTDiff.rowRange(0, m_maxbasis).clone();
+            m_templ.eigbasis = m_templ.eigbasis.colRange(0, k).clone();
+            m_templ.eigval = m_templ.eigval.rowRange(0, k).clone();
+            if (!m_backProj.empty())
+                m_backProj = m_backProj.rowRange(0, k).clone();
         }
     }
 
-    return state2Rect(m_est, m_templShape);
+    return state2Rect(m_mostLikelyState, m_templShape);
 }
 
 void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
@@ -143,21 +142,22 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     /* Propagate density */
     if (m_states.empty()) // the first iteration. Just tile initial template
     {
-        cv::repeat(m_est, m_nparticles, 1, m_states);
+        cv::repeat(m_mostLikelyState, Np, 1, m_states);
     }
     else
     {
-        const cv::Mat cumconf = cumsum(m_conf);
-        const cv::Mat cumconfNN = cv::repeat(cumconf, 1, m_nparticles);
+        const cv::Mat cumconf = cumsum(m_stateConfidences);
+        const cv::Mat cumconfNN = cv::repeat(cumconf, 1, Np);
 
-        cv::Mat uniformN(1, m_nparticles, CV_32F);
-        m_randomSampler.fill(uniformN, cv::RNG::UNIFORM, 0.0f, 0.99f);
-        const cv::Mat uniformNN = cv::repeat(uniformN, m_nparticles, 1);
+        cv::Mat uniformN(1, Np, CV_PRECISION);
+        m_randomSampler.fill(
+            uniformN, cv::RNG::UNIFORM, static_cast<PRECISION>(0.0), static_cast<PRECISION>(0.99));
+        const cv::Mat uniformNN = cv::repeat(uniformN, Np, 1);
 
         cv::Mat sumMask, cdfIds;
         cv::compare(uniformNN, cumconfNN, sumMask, cv::CMP_GT);
-        cv::reduce(sumMask, cdfIds, 0, cv::REDUCE_SUM, CV_32F);
-        cv::multiply(cdfIds, 0.003921569f, cdfIds, 1.0, CV_32F);
+        cv::reduce(sumMask, cdfIds, 0, cv::REDUCE_SUM, CV_PRECISION);
+        cv::multiply(cdfIds, static_cast<PRECISION>(0.003921569), cdfIds, 1.0, CV_PRECISION);
 
         cv::Mat cdfSamples = matRowIndexing(m_states, cdfIds);
         cv::swap(m_states, cdfSamples);
@@ -170,10 +170,10 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
 
     // Retrieve image patches It predicated by Xt
     const auto wimgsFlatten = warpImg(image, m_states, m_templShape, true);
-    for (int i = 0; i < m_nparticles; ++i)
+    for (int i = 0; i < Np; ++i)
     {
         const cv::Mat zeroMean = wimgsFlatten.col(i) - m_templ.mean;
-        zeroMean.copyTo(m_diff.col(i));
+        zeroMean.copyTo(m_residual.col(i));
     }
 
     // Compute likelihood under the observation model for each patch
@@ -181,47 +181,60 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     if (nCurrentEigenvectors > 0)
     {
         // Compute (I - mu) - UU.T(I - mu)
-        cv::Mat UTDiff = m_templ.eigbasis.t() * m_diff;
-        m_diff -= (m_templ.eigbasis * UTDiff);
-        cv::swap(UTDiff, m_UTDiff);
+        cv::Mat backProj = m_templ.eigbasis.t() * m_residual;
+        m_residual -= (m_templ.eigbasis * backProj);
+        cv::swap(backProj, m_backProj);
     }
 
-    cv::Mat diff2;
-    cv::pow(m_diff, 2, diff2);
-    const float prec = 1.0f / m_condenssig;
+    cv::Mat residual2;
+    cv::pow(m_residual, 2, residual2);
+    const auto prec = PRECISION(1.0) / m_condenssig;
+    cv::Mat residual2sum;
     switch (m_errfunc)
     {
+    case ErrorNorm::Ppca: // TODO
+        break;
     case ErrorNorm::Robust:
         {
-            const float rsig = 0.1f;
-            cv::Mat rho = diff2 / (diff2 + rsig);
-            cv::Mat diff2sum;
-            cv::reduce(rho, diff2sum, 0, cv::REDUCE_SUM, CV_32F);
-            cv::multiply(diff2sum, -prec, diff2sum, 1.0, CV_32F);
-            cv::exp(diff2sum.t(), m_conf);
+            const auto scaleParam = static_cast<PRECISION>(0.1);
+            cv::Mat rho = residual2 / (residual2 + scaleParam);
+            cv::reduce(rho, residual2sum, 0, cv::REDUCE_SUM, CV_PRECISION);
+            cv::multiply(residual2sum, -prec, residual2sum, 1.0, CV_PRECISION);
+            cv::exp(residual2sum.t(), m_stateConfidences);
         }
         break;
     case ErrorNorm::L2:
         {
-            cv::Mat diff2sum;
-            cv::reduce(diff2, diff2sum, 0, cv::REDUCE_SUM, CV_32F);
-            cv::multiply(diff2sum, -prec, diff2sum, 1.0, CV_32F);
-            cv::exp(diff2sum.t(), m_conf);
+            cv::reduce(residual2, residual2sum, 0, cv::REDUCE_SUM, CV_PRECISION);
+            cv::multiply(residual2sum, -prec, residual2sum, 1.0, CV_PRECISION);
+            cv::exp(residual2sum.t(), m_stateConfidences);
         }
         break;
     }
 
     /* Store most likely particle */
-    const float normCoeff = static_cast<float>(1.0 / cv::sum(m_conf)[0]);
-    cv::multiply(m_conf, normCoeff, m_conf, 1.0, CV_32F);
+    const auto normCoeff = static_cast<PRECISION>(1.0 / cv::sum(m_stateConfidences)[0]);
+    cv::multiply(m_stateConfidences, normCoeff, m_stateConfidences, 1.0, CV_PRECISION);
     double maxProb;
     int maxProbIdx;
-    cv::minMaxIdx(m_conf, nullptr, &maxProb, nullptr, &maxProbIdx);
-    m_est = m_states.row(maxProbIdx).clone();
+    cv::minMaxIdx(m_stateConfidences, nullptr, &maxProb, nullptr, &maxProbIdx);
+    m_mostLikelyState = m_states.row(maxProbIdx).clone();
+    m_templ.prob = maxProb;
     const cv::Mat maxProbWimgFlatten = wimgsFlatten.col(maxProbIdx).clone();
-    m_wimg = maxProbWimgFlatten.reshape(0, m_templShape.width).clone();
+    m_mostLikelyWarpImage = maxProbWimgFlatten.reshape(0, m_templShape.width).clone();
 
-    m_wimgs.emplace_back(maxProbWimgFlatten.clone());
+    m_warpBatch.emplace_back(maxProbWimgFlatten.clone());
+}
+
+
+const cv::Mat& IncrementalVisualTracker::stateConfidences() const noexcept
+{
+    return m_stateConfidences;
+}
+
+const cv::Mat& IncrementalVisualTracker::states() const noexcept
+{
+    return m_states;
 }
 
 const ObjectTemplate& IncrementalVisualTracker::objectTemplate() const noexcept
@@ -231,5 +244,5 @@ const ObjectTemplate& IncrementalVisualTracker::objectTemplate() const noexcept
 
 const cv::Mat& IncrementalVisualTracker::mostLikelyWarpImage() const noexcept
 {
-    return m_wimg;
+    return m_mostLikelyWarpImage;
 }

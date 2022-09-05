@@ -2,6 +2,8 @@
 #include <string>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
+
+#include "utils.h"
 #include "renderer.h"
 
 namespace
@@ -19,61 +21,99 @@ const cv::Scalar ColorRed { 0, 0, 255 };
 
 }
 
-cv::Mat renderTelemetry(int height, const cv::TickMeter& meter)
+cv::Mat renderTelemetry(
+    cv::Size imageSize, const cv::TickMeter& meter, const IncrementalVisualTracker::Ptr& tracker)
 {
-    const std::int64_t fno = meter.getCounter();
-    const float latency = static_cast<float>(meter.getAvgTimeMilli());
+    const auto& templ = tracker->objectTemplate();
+    const auto& states = tracker->states();
+    const auto& stateConfidences = tracker->stateConfidences();
 
-    int baseline;
-    const cv::Size textSize = cv::getTextSize(MaxStr, FontFace, FontScale, Thk, &baseline);
-    cv::Mat output = cv::Mat::zeros(height, textSize.width, CV_8UC3);
+    const std::int64_t fno = meter.getCounter();
+    const auto latency = static_cast<float>(meter.getAvgTimeMilli());
+
+    cv::Scalar probColor = ColorGreen;
+    if (templ.prob <= 0.0 + std::numeric_limits<double>::epsilon())
+        probColor = ColorRed;
+
+    cv::Mat output = cv::Mat::zeros(imageSize, CV_8UC3);
+
+    cv::Mat sortedStates;
+    cv::sortIdx(states, sortedStates, cv::SORT_EVERY_COLUMN + cv::SORT_ASCENDING);
+    cv::Mat stateConfidences8u;
+    stateConfidences.convertTo(stateConfidences8u, CV_8U, 255.0);
+    cv::Mat coloredStateConfidences;
+    cv::applyColorMap(stateConfidences8u, coloredStateConfidences, cv::COLORMAP_JET);
+    for (int i = 0; i < tracker->Np; ++i)
+    {
+        const int idx = sortedStates.at<int>(i);
+        const auto& state = states.row(idx);
+        const auto& stateConf = stateConfidences.at<PRECISION>(idx);
+        const auto cx = static_cast<int>(state.at<PRECISION>(0));
+        const auto cy = static_cast<int>(state.at<PRECISION>(1));
+        const auto stateRect = state2Rect(state, templ.size);
+        if (stateConf > 0.0)
+        {
+            const auto& colorPix = coloredStateConfidences.at<cv::Vec3b>(idx);
+            cv::rectangle(output, stateRect, cv::Scalar(colorPix));
+            cv::circle(output, cv::Point(cx, cy), 1, cv::Scalar(colorPix));
+        }
+        else
+        {
+            cv::circle(output, cv::Point(cx, cy), 1, cv::Scalar::all(127));
+        }
+    }
 
     const cv::Point offset(0, 25);
     cv::Point pos = cv::Point(15, 0);
     cv::putText(output, "#: " + std::to_string(fno), pos += offset, FontFace, FontScale, ColorGreen, Thk);
     cv::putText(output, cv::format("latency: %.2f ms", latency), pos += offset, FontFace, FontScale, ColorGreen, Thk);
+    cv::putText(output, cv::format("p(x): %.2f", float(templ.prob)), pos += offset, FontFace, FontScale - 0.1, probColor, Thk);
 
     return output;
 }
 
 cv::Mat renderEigenbasis(
-    int width, const ObjectTemplate& templ, const cv::Mat& warpImage)
+    int width, const IncrementalVisualTracker::Ptr& tracker)
 {
+    const auto& templ = tracker->objectTemplate();
+    const auto& warpImage32f = tracker->mostLikelyWarpImage();
+
+    auto postprocessImage = [](const cv::Mat& image){
+        cv::Mat output;
+        image.convertTo(output, CV_8U, 255.0);
+        cv::cvtColor(output, output, cv::COLOR_GRAY2BGR);
+        cv::resize(output, output, EigvecDisplaySize);
+        return output;
+    };
+
     // Post-process mean for displaying
     cv::Mat mean32f = templ.mean.reshape(0, templ.size.width).clone();
-    cv::Mat mean8u;
-    mean32f.convertTo(mean8u, CV_8U, 255.0);
-    cv::cvtColor(mean8u, mean8u, cv::COLOR_GRAY2BGR);
-    cv::resize(mean8u, mean8u, EigvecDisplaySize);
+    cv::Mat mean8u = postprocessImage(mean32f);
     cv::putText(mean8u, "Mean", cv::Point(5, 15), FontFace, FontScale - 0.1, ColorRed, Thk);
 
     // Post-process warp for displaying
-    cv::Mat warpImage8u;
-    warpImage.convertTo(warpImage8u, CV_8U, 255.0);
-    cv::cvtColor(warpImage8u, warpImage8u, cv::COLOR_GRAY2BGR);
-    cv::resize(warpImage8u, warpImage8u, EigvecDisplaySize);
+    cv::Mat warpImage8u = postprocessImage(warpImage32f);
     cv::putText(warpImage8u, "Warp", cv::Point(5, 15), FontFace, FontScale - 0.1, ColorRed, Thk);
 
     // Post-process error and reconstruction for displaying
     cv::Mat error8u, recon8u;
     if (!templ.eigbasis.empty())
     {
-        const cv::Mat warpImageFlatten = warpImage.reshape(0, templ.size.area());
+        const cv::Mat warpImageFlatten = warpImage32f.reshape(0, templ.size.area());
         const cv::Mat zeroMeanWarp = warpImageFlatten - templ.mean;
-        cv::Mat UTDiff = templ.eigbasis.t() * zeroMeanWarp;
         cv::Mat error32f = zeroMeanWarp - (templ.eigbasis * (templ.eigbasis.t() * zeroMeanWarp));
         error32f = error32f.reshape(0, templ.size.width);
+
+        // cv::Mat errorSq;
+        // cv::pow(error32f, 2, errorSq);
+        // const double rmse = std::sqrt(cv::sum(errorSq)[0]);
         
-        error32f.convertTo(error8u, CV_8U, 255.0);
-        cv::cvtColor(error8u, error8u, cv::COLOR_GRAY2BGR);
-        cv::resize(error8u, error8u, EigvecDisplaySize);
+        error8u = postprocessImage(error32f);
         cv::putText(error8u, "Err", cv::Point(5, 15), FontFace, FontScale - 0.1, ColorRed, Thk);
 
-        cv::Mat recon32f = warpImage + error32f;
+        cv::Mat recon32f = warpImage32f + error32f;
         
-        recon32f.convertTo(recon8u, CV_8U, 255.0);
-        cv::cvtColor(recon8u, recon8u, cv::COLOR_GRAY2BGR);
-        cv::resize(recon8u, recon8u, EigvecDisplaySize);
+        recon8u = postprocessImage(recon32f);
         cv::putText(recon8u, "Recon", cv::Point(5, 15), FontFace, FontScale - 0.1, ColorRed, Thk);
     }
     if (error8u.empty())
@@ -81,6 +121,7 @@ cv::Mat renderEigenbasis(
     if (recon8u.empty())
         recon8u = cv::Mat::zeros(EigvecDisplaySize, CV_8UC3);
 
+    // Stack all images
     cv::Mat output = cv::Mat::zeros(EigvecDisplaySize.height, width, CV_8UC3);
     mean8u.copyTo(
         output(cv::Rect(
