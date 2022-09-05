@@ -3,6 +3,8 @@
 #include <vector>
 #include <opencv2/core.hpp>
 
+#include "defaults.h"
+
 /**
  * @brief Sequential Karhunen-Loeve Transform.
  * 
@@ -19,5 +21,5 @@
  * @param neff new number of data
  */
 void sklm(
-    const std::vector<cv::Mat>& data, const cv::Mat& U0, const cv::Mat& D0, const cv::Mat& mu0, int n, float ff, 
+    const std::vector<cv::Mat>& data, const cv::Mat& U0, const cv::Mat& D0, const cv::Mat& mu0, int n, PRECISION ff, 
     cv::Mat& U, cv::Mat& D, cv::Mat& mu, int& neff);

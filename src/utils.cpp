@@ -13,28 +13,28 @@ cv::Mat warpImg(const cv::Mat& image, const cv::Mat& states, cv::Size targetSize
     auto makeWarp = [](
         const cv::Mat& image, const cv::Mat& state, cv::Size targetSize, bool flatten)
     {
-        const float cx = state.at<float>(0);
-        const float cy = state.at<float>(1);
-        const float scale = state.at<float>(2);
-        const float aspectRatio = state.at<float>(3);
+        const auto cx = state.at<PRECISION>(0);
+        const auto cy = state.at<PRECISION>(1);
+        const auto scale = state.at<PRECISION>(2);
+        const auto aspectRatio = state.at<PRECISION>(3);
         
-        const float width = scale * targetSize.width;
-        const float height = aspectRatio * width;
-        const float x1 = cx - width / 2.0f;
-        const float y1 = cy - height / 2.0f;
-        const float x2 = x1 + width;
-        const float y2 = y1 + height;
-        cv::Rect2f warpBox(x1, y1, width, height);
+        const auto width = static_cast<PRECISION>(scale * targetSize.width);
+        const auto height = static_cast<PRECISION>(aspectRatio * width);
+        const auto x1 = cx - (width / PRECISION(2.0));
+        const auto y1 = cy - (height / PRECISION(2.0));
+        const auto x2 = x1 + width;
+        const auto y2 = y1 + height;
+        cv::Rect_<PRECISION> warpBox(x1, y1, width, height);
         if (x1 < 0)
-            warpBox += cv::Point2f(std::abs(x1), 0);
+            warpBox += cv::Point_<PRECISION>(std::abs(x1), 0);
         if (x2 >= image.cols)
-            warpBox -= cv::Point2f(x2 - image.cols + 1, 0);
+            warpBox -= cv::Point_<PRECISION>(x2 - image.cols + 1, 0);
         if (y1 < 0)
-            warpBox += cv::Point2f(0, std::abs(y1));
+            warpBox += cv::Point_<PRECISION>(0, std::abs(y1));
         if (y2 >= image.rows)
-            warpBox -= cv::Point2f(0, y2 - image.rows + 1);
+            warpBox -= cv::Point_<PRECISION>(0, y2 - image.rows + 1);
 
-        cv::Mat crop = image(cv::Rect2i(warpBox));
+        cv::Mat crop = image(cv::Rect2i(warpBox)).clone();
         cv::resize(crop, crop, targetSize, 0.0, 0.0, cv::INTER_LINEAR);
         if (flatten)
             crop = crop.reshape(0, targetSize.area());
@@ -48,13 +48,13 @@ cv::Mat warpImg(const cv::Mat& image, const cv::Mat& states, cv::Size targetSize
     {
         const auto warp8u = makeWarp(image, states, targetSize, flatten);
         cv::Mat output;
-        warp8u.convertTo(output, CV_32F);
+        warp8u.convertTo(output, CV_PRECISION);
         return output;
     }
 
     if (flatten)
     {
-        cv::Mat output(targetSize.area(), nStates, CV_32F);
+        cv::Mat output(targetSize.area(), nStates, CV_PRECISION);
         for (int i = 0; i < nStates; ++i)
             makeWarp(image, states.row(i), targetSize, flatten)
                 .copyTo(output.col(i));
@@ -68,9 +68,9 @@ cv::Mat warpImg(const cv::Mat& image, const cv::Mat& states, cv::Size targetSize
 cv::Mat cumsum(const cv::Mat& image)
 {
     cv::Mat output(image.size(), image.type());
-    cv::MatConstIterator_<float> imageIt = image.begin<float>();
-    cv::MatIterator_<float> outputIt = output.begin<float>();
-    for (float sum = 0.0f; imageIt != image.end<float>(); ++imageIt, ++outputIt)
+    cv::MatConstIterator_<PRECISION> imageIt = image.begin<PRECISION>();
+    cv::MatIterator_<PRECISION> outputIt = output.begin<PRECISION>();
+    for (PRECISION sum = PRECISION(0.0); imageIt != image.end<PRECISION>(); ++imageIt, ++outputIt)
         (*outputIt) = (sum += (*imageIt));
 
     return output;
@@ -79,7 +79,7 @@ cv::Mat cumsum(const cv::Mat& image)
 cv::Mat matRowIndexing(const cv::Mat& image, const cv::Mat& rowIds)
 {
     cv::Mat output = cv::Mat(image.size(), image.type());
-    cv::MatConstIterator_<float> rowIdsIt = rowIds.begin<float>();
+    cv::MatConstIterator_<PRECISION> rowIdsIt = rowIds.begin<PRECISION>();
     for (int i = 0; i < image.rows; ++i, ++rowIdsIt)
     {
         const int rowId = static_cast<int>(std::floor(*rowIdsIt));
@@ -91,16 +91,16 @@ cv::Mat matRowIndexing(const cv::Mat& image, const cv::Mat& rowIds)
 
 cv::Rect state2Rect(const cv::Mat& state, cv::Size targetSize)
 {
-    const float cx = state.at<float>(0);
-    const float cy = state.at<float>(1);
-    const float scale = state.at<float>(2);
-    const float aspectRatio = state.at<float>(3);
+    const auto cx = state.at<PRECISION>(0);
+    const auto cy = state.at<PRECISION>(1);
+    const auto scale = state.at<PRECISION>(2);
+    const auto aspectRatio = state.at<PRECISION>(3);
 
-    const float width = scale * targetSize.width;
-    const float height = aspectRatio * width;
-    const float x1 = cx - width / 2.0f;
-    const float y1 = cy - height / 2.0f;
-    const float x2 = x1 + width;
-    const float y2 = y1 + height;
+    const auto width = static_cast<PRECISION>(scale * targetSize.width);
+    const auto height = static_cast<PRECISION>(aspectRatio * width);
+    const auto x1 = cx - width / PRECISION(2.0);
+    const auto y1 = cy - height / PRECISION(2.0);
+    const auto x2 = x1 + width;
+    const auto y2 = y1 + height;
     return cv::Rect(int(x1), int(y1), int(width), int(height));
 }

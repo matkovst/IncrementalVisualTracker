@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(ivt)
 
 # OpenCV
+if (NOT OpenCV_DIR AND DEFINED ENV{OpenCV_DIR})
+    set(OpenCV_DIR $ENV{OpenCV_DIR})
+endif()
 if(NOT OpenCV_DIR)
     message(FATAL_ERROR "You must specify OpenCV_DIR")
 endif()
