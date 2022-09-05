@@ -51,6 +51,7 @@ cv::Mat preprocessImage(const cv::Mat& image)
 int main(int argc, char** argv)
 {
     std::cout << "Program started" << std::endl;
+    std::cout << "Precision: " << CV_PRECISION << std::endl;
 
     /* Check and parse cmd args */
     cv::CommandLineParser parser(argc, argv, CommandLineParams);
