@@ -12,13 +12,14 @@
 
 IncrementalVisualTracker::IncrementalVisualTracker(
     const cv::Mat& affsig, int nparticles, PRECISION condenssig, PRECISION forgetting, 
-    int batchsize, cv::Size templShape, int maxbasis, int errfunc)
+    int batchsize, cv::Size templShape, int maxbasis, double robustThr)
         : m_affsig(affsig.clone())
         , m_condenssig(condenssig)
         , m_forgetting(forgetting)
         , m_batchsize(batchsize)
         , m_templShape(templShape)
-        , m_errfunc(errfunc)
+        , m_robustThr(robustThr)
+        , m_errfunc((robustThr > 0.0) ? Robust : L2)
         , m_trackerInitialized(false)
         , d(templShape.area())
         , Np(nparticles)
@@ -63,10 +64,10 @@ bool IncrementalVisualTracker::init(const cv::Mat& image, cv::Rect initialBox)
     return true;
 }
 
-cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
+Estimation IncrementalVisualTracker::track(const cv::Mat& image)
 {
     if (!m_trackerInitialized)
-        return cv::Rect();
+        return Estimation();
     // Do the condensation magic and find the most likely location
     estimateWarpCondensation(image);
 
@@ -134,7 +135,10 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
         }
     }
 
-    return state2Rect(m_mostLikelyState, m_templShape);
+    Estimation est;
+    est.position = state2Rect(m_mostLikelyState, m_templShape);
+    est.confidence = m_templ.prob;
+    return est;
 }
 
 void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
@@ -196,7 +200,7 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
         break;
     case ErrorNorm::Robust:
         {
-            const auto scaleParam = static_cast<PRECISION>(0.1);
+            const auto scaleParam = static_cast<PRECISION>(m_robustThr);
             cv::Mat rho = residual2 / (residual2 + scaleParam);
             cv::reduce(rho, residual2sum, 0, cv::REDUCE_SUM, CV_PRECISION);
             cv::multiply(residual2sum, -prec, residual2sum, 1.0, CV_PRECISION);

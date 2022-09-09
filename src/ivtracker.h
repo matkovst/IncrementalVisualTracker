@@ -31,6 +31,12 @@ struct ObjectTemplate final
     double prob { 0.0 };// probability under the observation model
 };
 
+struct Estimation final
+{
+    cv::Rect position;
+    double confidence { 0.0 };
+};
+
 /**
  * @brief Incremental robust self-learning algorithm for visual tracking
  * 
@@ -56,7 +62,7 @@ public:
      * @param batchsize size of frames after which do PCA update
      * @param templShape size of object window for PCA
      * @param maxbasis number of eigenvectors for PCA
-     * @param errfunc error function for minimizing the effect of noisy pixels
+     * @param robustThr reject region for robust norm
      */
     IncrementalVisualTracker(
         const cv::Mat& affsig, 
@@ -66,7 +72,7 @@ public:
         int batchsize = 5, 
         cv::Size templShape = cv::Size(32, 32), 
         int maxbasis = 16, 
-        int errfunc = ErrorNorm::L2);
+        double robustThr = 0.1);
 
     ~IncrementalVisualTracker();
 
@@ -85,9 +91,9 @@ public:
      * 
      * @param image input image (grayscaled, float32/64, normalized from 0 to 1)
      * 
-     * @return estimated object location
+     * @return estimated object location + confidence
      */
-    cv::Rect track(const cv::Mat& image);
+    Estimation track(const cv::Mat& image);
 
 
     const cv::Mat& stateConfidences() const noexcept;
@@ -122,6 +128,7 @@ private:
     PRECISION m_forgetting;         // forgetting factor
     int m_batchsize;                // number of observations used for eigenbasis learning
     cv::Size m_templShape;          // 2d shape of object template
+    double m_robustThr;             // reject region for robust norm
     int m_errfunc;                  // error function used for distance-to-subspace estimation
 
     /* Program data */

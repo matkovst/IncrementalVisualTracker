@@ -21,6 +21,12 @@ const cv::Scalar ColorRed { 0, 0, 255 };
 
 }
 
+void renderEstimation(cv::Mat& image, const Estimation& est, double rejectThr)
+{
+    const auto color = (est.confidence < rejectThr) ? ColorRed : ColorGreen;
+    cv::rectangle(image, est.position, color, Thk+1);
+}
+
 cv::Mat renderTelemetry(
     cv::Size imageSize, const cv::TickMeter& meter, const IncrementalVisualTracker::Ptr& tracker)
 {

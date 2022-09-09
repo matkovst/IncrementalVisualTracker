@@ -13,6 +13,8 @@ cv::Mat warpImg(const cv::Mat& image, const cv::Mat& states, cv::Size targetSize
     auto makeWarp = [](
         const cv::Mat& image, const cv::Mat& state, cv::Size targetSize, bool flatten)
     {
+        const cv::Rect imageRect(0, 0, image.cols, image.rows);
+
         const auto cx = state.at<PRECISION>(0);
         const auto cy = state.at<PRECISION>(1);
         const auto scale = state.at<PRECISION>(2);
@@ -24,17 +26,24 @@ cv::Mat warpImg(const cv::Mat& image, const cv::Mat& states, cv::Size targetSize
         const auto y1 = cy - (height / PRECISION(2.0));
         const auto x2 = x1 + width;
         const auto y2 = y1 + height;
-        cv::Rect_<PRECISION> warpBox(x1, y1, width, height);
-        if (x1 < 0)
-            warpBox += cv::Point_<PRECISION>(std::abs(x1), 0);
-        if (x2 >= image.cols)
-            warpBox -= cv::Point_<PRECISION>(x2 - image.cols + 1, 0);
-        if (y1 < 0)
-            warpBox += cv::Point_<PRECISION>(0, std::abs(y1));
-        if (y2 >= image.rows)
-            warpBox -= cv::Point_<PRECISION>(0, y2 - image.rows + 1);
+        cv::Rect_<PRECISION> warpBoxf(x1, y1, width, height);
+        cv::Rect warpBox(warpBoxf);
+        const auto intersection = (warpBox & imageRect);
+        if (intersection.area() != warpBox.area())
+        {
+            cv::Mat dummyOutput = cv::Mat::zeros(targetSize.area(), 1, CV_PRECISION);
+            return dummyOutput;
+        }
+        // if (x1 < 0)
+        //     warpBoxf += cv::Point_<PRECISION>(std::abs(x1), 0);
+        // if (x2 >= image.cols)
+        //     warpBoxf -= cv::Point_<PRECISION>(x2 - image.cols + 1, 0);
+        // if (y1 < 0)
+        //     warpBoxf += cv::Point_<PRECISION>(0, std::abs(y1));
+        // if (y2 >= image.rows)
+        //     warpBoxf -= cv::Point_<PRECISION>(0, y2 - image.rows + 1);
 
-        cv::Mat crop = image(cv::Rect2i(warpBox)).clone();
+        cv::Mat crop = image(cv::Rect2i(warpBoxf)).clone();
         cv::resize(crop, crop, targetSize, 0.0, 0.0, cv::INTER_LINEAR);
         if (flatten)
             crop = crop.reshape(0, targetSize.area());
