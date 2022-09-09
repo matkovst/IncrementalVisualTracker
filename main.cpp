@@ -32,6 +32,7 @@ const cv::String CommandLineParams =
     "{ reject_thr       |  0.1    | reject probability for breaking track }"
 
     // Tracker debug params
+    "{ start_at         |  0      | start at frame }"
     "{ init_x           |  0.0    | initial object x-coord }"
     "{ init_y           |  0.0    | initial object y-coord }"
     "{ init_w           |  0.0    | initial object w-coord }"
@@ -77,6 +78,9 @@ int main(int argc, char** argv)
     const auto initw = parser.get<float>("init_w");
     const auto inith = parser.get<float>("init_h");
     const auto recordName = parser.get<std::string>("record");
+    auto startAt = parser.get<int>("start_at");
+    if (startAt < 1)
+        startAt = 1;
     const cv::Rect2f initialBoxf(initx, inity, initw, inith);
     const bool hasInitialBox = (initx * inity * initw * inith) != 0;
 
@@ -92,7 +96,8 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
     cv::Mat frame0;
-    capture >> frame0;
+    for (int i = 0; i < startAt; ++i)
+        capture >> frame0;
     if (frame0.empty())
     {
         std::cerr << "Empty frame" << std::endl;
@@ -148,7 +153,7 @@ int main(int argc, char** argv)
     /* Start main loop */
     cv::Mat frame = frame0;
     cv::Mat preprocFrame = preprocFrame0;
-    std::int64_t frameNum = 1;
+    std::int64_t frameNum = startAt;
     cv::TickMeter meter;
     while (capture.isOpened())
     {
