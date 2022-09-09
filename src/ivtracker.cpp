@@ -12,13 +12,14 @@
 
 IncrementalVisualTracker::IncrementalVisualTracker(
     const cv::Mat& affsig, int nparticles, PRECISION condenssig, PRECISION forgetting, 
-    int batchsize, cv::Size templShape, int maxbasis, int errfunc)
+    int batchsize, cv::Size templShape, int maxbasis, double robustThr)
         : m_affsig(affsig.clone())
         , m_condenssig(condenssig)
         , m_forgetting(forgetting)
         , m_batchsize(batchsize)
         , m_templShape(templShape)
-        , m_errfunc(errfunc)
+        , m_robustThr(robustThr)
+        , m_errfunc((robustThr > 0.0) ? Robust : L2)
         , m_trackerInitialized(false)
         , d(templShape.area())
         , Np(nparticles)

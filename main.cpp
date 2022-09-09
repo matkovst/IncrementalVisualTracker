@@ -30,6 +30,7 @@ const cv::String CommandLineParams =
     "{ maxbasis         |  16     | effective number of eigenvectors }"
     "{ batchsize        |  5      | observation batch size used for updating I-PCA }"
     "{ reject_thr       |  0.1    | reject probability for breaking track }"
+    "{ robust_thr       |  0.1    | robust sigma }"
 
     // Tracker debug params
     "{ start_at         |  0      | start at frame }"
@@ -73,6 +74,7 @@ int main(int argc, char** argv)
     const auto maxbasis = parser.get<int>("maxbasis");
     const auto batchsize = parser.get<int>("batchsize");
     const auto rejectThr = parser.get<double>("reject_thr");
+    const auto robustThr = parser.get<double>("robust_thr");
     const auto initx = parser.get<float>("init_x");
     const auto inity = parser.get<float>("init_y");
     const auto initw = parser.get<float>("init_w");
@@ -115,8 +117,7 @@ int main(int argc, char** argv)
 
     /* Create tracker */
     IncrementalVisualTracker::Ptr tracker = std::make_shared<IncrementalVisualTracker>(
-        Affsig, nParticles, Condenssig, ForgettingFactor, batchsize, TemplSize, maxbasis, 
-        IncrementalVisualTracker::ErrorNorm::Robust);
+        Affsig, nParticles, Condenssig, ForgettingFactor, batchsize, TemplSize, maxbasis, robustThr);
 
     /* Set initial box */
     cv::Rect initialBox;

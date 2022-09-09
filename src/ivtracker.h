@@ -62,7 +62,7 @@ public:
      * @param batchsize size of frames after which do PCA update
      * @param templShape size of object window for PCA
      * @param maxbasis number of eigenvectors for PCA
-     * @param errfunc error function for minimizing the effect of noisy pixels
+     * @param robustThr reject region for robust norm
      */
     IncrementalVisualTracker(
         const cv::Mat& affsig, 
@@ -72,7 +72,7 @@ public:
         int batchsize = 5, 
         cv::Size templShape = cv::Size(32, 32), 
         int maxbasis = 16, 
-        int errfunc = ErrorNorm::L2);
+        double robustThr = 0.1);
 
     ~IncrementalVisualTracker();
 
@@ -128,6 +128,7 @@ private:
     PRECISION m_forgetting;         // forgetting factor
     int m_batchsize;                // number of observations used for eigenbasis learning
     cv::Size m_templShape;          // 2d shape of object template
+    double m_robustThr;             // reject region for robust norm
     int m_errfunc;                  // error function used for distance-to-subspace estimation
 
     /* Program data */
