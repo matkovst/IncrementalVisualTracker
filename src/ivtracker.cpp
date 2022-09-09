@@ -200,7 +200,7 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
         break;
     case ErrorNorm::Robust:
         {
-            const auto scaleParam = static_cast<PRECISION>(0.1);
+            const auto scaleParam = static_cast<PRECISION>(m_robustThr);
             cv::Mat rho = residual2 / (residual2 + scaleParam);
             cv::reduce(rho, residual2sum, 0, cv::REDUCE_SUM, CV_PRECISION);
             cv::multiply(residual2sum, -prec, residual2sum, 1.0, CV_PRECISION);
