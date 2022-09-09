@@ -8,7 +8,7 @@ The code was mostly grounded on the original MATLAB-implementation posted in htt
 - **Eigen3**
 
 ## Run
-Inside build folder execute
+Cmake yields two executables *ivt_fast* and *ivt_accurate* which for operating F32 and F64 precision respectively. Choose appropriate mode and launch it inside build folder
 ```
-./ivt --input <path_to_video>
+./ivt_accurate --input <path_to_video>
 ```

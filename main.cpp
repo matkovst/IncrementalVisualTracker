@@ -29,6 +29,7 @@ const cv::String CommandLineParams =
     "{ nparticles       |  600    | number of particles }"
     "{ maxbasis         |  16     | effective number of eigenvectors }"
     "{ batchsize        |  5      | observation batch size used for updating I-PCA }"
+    "{ reject_thr       |  0.1    | reject probability for breaking track }"
 
     // Tracker debug params
     "{ init_x           |  0.0    | initial object x-coord }"
@@ -51,7 +52,6 @@ cv::Mat preprocessImage(const cv::Mat& image)
 int main(int argc, char** argv)
 {
     std::cout << "Program started" << std::endl;
-    std::cout << "Precision: " << CV_PRECISION << std::endl;
 
     /* Check and parse cmd args */
     cv::CommandLineParser parser(argc, argv, CommandLineParams);
@@ -71,6 +71,7 @@ int main(int argc, char** argv)
     const auto nParticles = parser.get<int>("nparticles");
     const auto maxbasis = parser.get<int>("maxbasis");
     const auto batchsize = parser.get<int>("batchsize");
+    const auto rejectThr = parser.get<double>("reject_thr");
     const auto initx = parser.get<float>("init_x");
     const auto inity = parser.get<float>("init_y");
     const auto initw = parser.get<float>("init_w");
@@ -153,11 +154,11 @@ int main(int argc, char** argv)
     {
         /* Analytical core */
         meter.start();
-        const auto estBoundingBox = tracker->track(preprocFrame);
+        const auto estimation = tracker->track(preprocFrame);
         meter.stop();
 
         /* Render results */
-        cv::rectangle(frame, estBoundingBox, cv::Scalar(0, 0, 255), 2);
+        renderEstimation(frame, estimation, rejectThr);
         const auto telemetryPanel = renderTelemetry(
             frame.size(), meter, tracker);
         const auto eigenPanel = renderEigenbasis(

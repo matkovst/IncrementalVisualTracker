@@ -63,10 +63,10 @@ bool IncrementalVisualTracker::init(const cv::Mat& image, cv::Rect initialBox)
     return true;
 }
 
-cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
+Estimation IncrementalVisualTracker::track(const cv::Mat& image)
 {
     if (!m_trackerInitialized)
-        return cv::Rect();
+        return Estimation();
     // Do the condensation magic and find the most likely location
     estimateWarpCondensation(image);
 
@@ -134,7 +134,10 @@ cv::Rect IncrementalVisualTracker::track(const cv::Mat& image)
         }
     }
 
-    return state2Rect(m_mostLikelyState, m_templShape);
+    Estimation est;
+    est.position = state2Rect(m_mostLikelyState, m_templShape);
+    est.confidence = m_templ.prob;
+    return est;
 }
 
 void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)

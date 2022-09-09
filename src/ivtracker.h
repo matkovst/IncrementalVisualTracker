@@ -31,6 +31,12 @@ struct ObjectTemplate final
     double prob { 0.0 };// probability under the observation model
 };
 
+struct Estimation final
+{
+    cv::Rect position;
+    double confidence { 0.0 };
+};
+
 /**
  * @brief Incremental robust self-learning algorithm for visual tracking
  * 
@@ -85,9 +91,9 @@ public:
      * 
      * @param image input image (grayscaled, float32/64, normalized from 0 to 1)
      * 
-     * @return estimated object location
+     * @return estimated object location + confidence
      */
-    cv::Rect track(const cv::Mat& image);
+    Estimation track(const cv::Mat& image);
 
 
     const cv::Mat& stateConfidences() const noexcept;
