@@ -220,6 +220,10 @@ int main(int argc, char** argv)
         writer.release();
     cv::destroyAllWindows();
     
+    const auto avgMilli = meter.getAvgTimeMilli();
+    std::cout << std::endl << "Processing took " 
+        << static_cast<std::int64_t>(avgMilli) 
+        << " ms (" << 1000.0 / avgMilli << " FPS) on the average" << std::endl;
     std::cout << "Program finished successfully" << std::endl;
     return 0;
 }
