@@ -219,15 +219,16 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     /* Store most likely particle */
     const auto normCoeff = static_cast<PRECISION>(1.0 / cv::sum(m_stateConfidences)[0]);
     cv::multiply(m_stateConfidences, normCoeff, m_stateConfidences, 1.0, CV_PRECISION);
-    double maxProb;
-    int maxProbIdx;
-    cv::minMaxIdx(m_stateConfidences, nullptr, &maxProb, nullptr, &maxProbIdx);
-    m_mostLikelyState = m_states.row(maxProbIdx).clone();
+
+    double maxProb = 0;
+    int maxProbIdx[2] = {0,0};
+    cv::minMaxIdx(m_stateConfidences, nullptr, &maxProb, nullptr, maxProbIdx);
+    m_mostLikelyState = m_states.row(maxProbIdx[1]).clone();
     m_templ.prob = maxProb;
-    const cv::Mat maxProbWimgFlatten = wimgsFlatten.col(maxProbIdx).clone();
+    const cv::Mat maxProbWimgFlatten = wimgsFlatten.col(maxProbIdx[1]).clone();
     m_mostLikelyWarpImage = maxProbWimgFlatten.reshape(0, m_templShape.width).clone();
 
-    m_warpBatch.emplace_back(maxProbWimgFlatten.clone());
+    m_warpBatch.push_back(maxProbWimgFlatten.clone());       
 }
 
 
