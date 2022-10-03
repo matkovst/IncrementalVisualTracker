@@ -222,7 +222,7 @@ void IncrementalVisualTracker::estimateWarpCondensation(const cv::Mat& image)
     double maxProb = 0;
     int maxProbIdx[2] = {0,0};
     cv::minMaxIdx(m_stateConfidences, nullptr, &maxProb, nullptr, maxProbIdx);
-    m_mostLikelyState = m_states.row(maxProbIdx[1]).clone();
+    m_mostLikelyState = m_states.row(maxProbIdx[0]).clone();
     m_templ.prob = maxProb;
     const cv::Mat maxProbWimgFlatten = wimgsFlatten.col(maxProbIdx[1]).clone();
     m_mostLikelyWarpImage = maxProbWimgFlatten.reshape(0, m_templShape.width).clone();
